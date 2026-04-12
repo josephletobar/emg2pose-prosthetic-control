@@ -4,6 +4,15 @@ from IPython.display import display, HTML
 
 def evaluate_predictions(preds, gt, save_prefix=None):
 
+    # --- align lengths if off-by-one ---
+    if preds.shape[0] != gt.shape[0]:
+        min_len = min(preds.shape[0], gt.shape[0])
+        print(f"[Warning] Length mismatch (pred={preds.shape[0]}, gt={gt.shape[0]}). "
+            f"Truncating to {min_len}. Possible slight misalignment.")
+
+        preds = preds[:min_len]
+        gt = gt[:min_len]
+
     N_COLS = 2
     N_ROWS = int(np.ceil(preds.shape[1] / N_COLS))
 
