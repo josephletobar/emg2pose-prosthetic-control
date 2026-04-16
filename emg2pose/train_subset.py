@@ -6,7 +6,7 @@ import pandas as pd
 from datetime import datetime
 from pathlib import Path
 
-def train_subset(sessions, data_download_dir):
+def train_subset(sessions, data_download_dir, epochs=100):
     """
     Prepares a training dataset from a subset of sessions.
 
@@ -96,7 +96,7 @@ def train_subset(sessions, data_download_dir):
         "train=True",
         "eval=True",
         "experiment=tracking_vemg2pose",
-        "trainer.max_epochs=100",
+        f"trainer.max_epochs={epochs}",
         f"+callbacks.1.dirpath={ckpt_dir}",
         f"+callbacks.1.filename={ckpt_name}",
         f"data_location={TMP_DIR}"

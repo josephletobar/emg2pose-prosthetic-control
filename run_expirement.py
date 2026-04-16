@@ -14,6 +14,8 @@ from emg2pose.train_subset import train_subset
 from emg2pose.lightning import Emg2PoseModule
 from emg2pose.utils import generate_hydra_config_from_overrides
 from emg2pose.feature_extraction import features
+from emg2pose.metrics import get_default_metrics
+from emg2pose.utils import downsample
 
 from sklearn.linear_model import Ridge
 from sklearn.svm import SVR
@@ -33,32 +35,57 @@ class ExperimentRunner():
         self.user_train_dict = {}
 
         # Sessions to evalaute on
-        self.seen_user_sesion
-        self.unseen_user_sesion
+        self.seen_user_sesion = []
+        self.unseen_user_sesion = []
 
         # File locations
         self.data_dir = data_dir
         self.metadata_df = pd.read_csv(data_dir / "emg2pose_metadata.csv")
         # User sessions
         self.user_list = sorted([
-            p for p in Path(data_dir, "emg2pose_dataset_mini").iterdir()
+            p for p in Path(data_dir, "emg_dataset/by_user").iterdir()
             if p.is_dir()
         ])
 
     # Training User and Session Selection Helpers
+    def _user_has_valid_session(self, user):
+        for s in user.glob("*.hdf5"):
+            try:
+                _ = Emg2PoseSessionData(hdf5_path=s)
+                return True
+            except:
+                continue
+        return False
+
     def _pick_one_user(self):
-        rand_user = random.choice(self.user_list)
-        return { rand_user: [] }
+        while True:
+            rand_user = random.choice(self.user_list)
+            if self._user_has_valid_session(rand_user):
+                return {rand_user: []}
+
     def _random_subset(self, k):
-        rand_users = random.sample(self.user_list, k)
-        return {user: [] for user in rand_users}
+        selected = {}
+
+        while len(selected) < k:
+            rand_user = random.choice(self.user_list)
+
+            if rand_user in selected:
+                continue
+
+            if self._user_has_valid_session(rand_user):
+                selected[rand_user] = []
+
+        return selected
+
     def _pick_sessions(self, user_train_dict):
         for user in user_train_dict:
             sessions = sorted(user.glob("*.hdf5"))
+
             if self.data_regime == "single_session":
                 user_train_dict[user] = [random.choice(sessions)]
             else:
                 user_train_dict[user] = sessions
+
         return user_train_dict
 
     # Load Data Based on Training Regime
@@ -129,14 +156,12 @@ class ExperimentRunner():
         return train_sessions_list
 
     # LSTM architecture and training; returns the trained model
-    def train_small_lstm(self):
+    def train_small_lstm(self, epochs=5):
 
         print("\n -- Training LSTM --")
 
-        # Load session(s) (RAW EMG)
         X_all, y_all = [], []
-        
-        # Loop over users and their respective sessions
+
         for user, sessions in self.user_train_dict.items():
             for session in sessions:
                 data = Emg2PoseSessionData(hdf5_path=session)
@@ -146,20 +171,16 @@ class ExperimentRunner():
         X = np.concatenate(X_all, axis=0)
         y = np.concatenate(y_all, axis=0)
 
-        # downsampling 
-        ds_factor = 4   # 2000 Hz to 500 Hz 
+        ds_factor = 4
         X = X[::ds_factor]
         y = y[::ds_factor]
 
-        # sequence params
-        seq_len = 100   # ~200 ms at 500 Hz
+        seq_len = 100
         target_samples = 20_000
 
-        # adaptive stride
         raw_N = len(X) - seq_len
         stride = max(1, raw_N // target_samples)
 
-        # sequence building
         def make_sequences(X, y, seq_len, stride):
             Xs, ys = [], []
             for i in range(0, len(X) - seq_len, stride):
@@ -169,69 +190,38 @@ class ExperimentRunner():
 
         X_seq, y_seq = make_sequences(X, y, seq_len, stride)
 
-        # split
         split_idx = int(0.8 * len(X_seq))
         X_train, X_test = X_seq[:split_idx], X_seq[split_idx:]
         y_train, y_test = y_seq[:split_idx], y_seq[split_idx:]
 
-        # tensors
         X_train = torch.tensor(X_train, dtype=torch.float32)
         y_train = torch.tensor(y_train, dtype=torch.float32)
         X_test  = torch.tensor(X_test, dtype=torch.float32)
         y_test  = torch.tensor(y_test, dtype=torch.float32)
 
-        train_loader = DataLoader(
-            TensorDataset(X_train, y_train),
-            batch_size=64,
-            shuffle=True
-        )
+        train_loader = DataLoader(TensorDataset(X_train, y_train), batch_size=64, shuffle=True)
 
-        test_loader = DataLoader(
-            TensorDataset(X_test, y_test),
-            batch_size=64
-        )
-
-        # --- Conv + LSTM model ---
         class ConvLSTM(nn.Module):
             def __init__(self, in_ch, out_dim):
                 super().__init__()
-
-                # keep temporal resolution (no stride)
-                self.conv = nn.Conv1d(
-                    in_channels=in_ch,
-                    out_channels=32,
-                    kernel_size=9,
-                    stride=1,
-                    padding=4
-                )
-
+                self.conv = nn.Conv1d(in_ch, 32, kernel_size=9, padding=4)
                 self.relu = nn.ReLU()
-
-                self.lstm = nn.LSTM(
-                    input_size=32,
-                    hidden_size=128,
-                    num_layers=2,
-                    batch_first=True
-                )
-
+                self.lstm = nn.LSTM(32, 128, num_layers=2, batch_first=True)
                 self.fc = nn.Linear(128, out_dim)
 
             def forward(self, x):
-                x = x.transpose(1, 2)      # (B, C, T)
-                x = self.conv(x)           # (B, 32, T)
-                x = self.relu(x)
-                x = x.transpose(1, 2)      # (B, T, 32)
-
+                x = x.transpose(1, 2)
+                x = self.relu(self.conv(x))
+                x = x.transpose(1, 2)
                 out, _ = self.lstm(x)
                 return self.fc(out[:, -1, :])
 
         model = ConvLSTM(X.shape[1], y.shape[1])
 
-        # train
         optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
         loss_fn = nn.MSELoss()
 
-        for epoch in range(5):
+        for epoch in range(epochs):
             for xb, yb in train_loader:
                 pred = model(xb)
                 loss = loss_fn(pred, yb)
@@ -242,34 +232,26 @@ class ExperimentRunner():
 
             print(f"Epoch {epoch}: loss = {loss.item():.4f}")
 
-        # eval
-        model.eval()
-        preds = []
-
-        with torch.no_grad():
-            for xb, _ in test_loader:
-                preds.append(model(xb))
-
-        y_pred = torch.cat(preds).numpy()
-        y_test = y_test.numpy()
-
         print("-- Finished Training LSTM -- \n")
 
-        return model
+        # IMPORTANT: return params for alignment
+        return model, seq_len, ds_factor, stride
     
-    def small_lstm_inference(self, data, model, seq_len=100, ds_factor=4, stride=1):
-        # --- inference on RAW EMG (MATCHES training pipeline) ---
+    def small_lstm_inference(self, data, model, seq_len, ds_factor, stride):
 
         X_raw = data['emg']
         y_raw = data['joint_angles']
+        mask_raw = data.no_ik_failure
 
         model.eval()
         preds = []
 
-        # --- SAME preprocessing as training ---
+        # --- downsample ---
         X = X_raw[::ds_factor]
         y = y_raw[::ds_factor]
+        mask = mask_raw[::ds_factor]
 
+        # --- build predictions ---
         for i in range(0, len(X) - seq_len, stride):
             window = X[i:i+seq_len]
             window = torch.tensor(window[None, ...], dtype=torch.float32)
@@ -281,14 +263,18 @@ class ExperimentRunner():
 
         preds = np.array(preds)
 
-        # --- GT aligned EXACTLY like training ---
+        # --- align GT + mask EXACTLY like training ---
         y_gt = []
+        mask_aligned = []
+
         for i in range(0, len(y) - seq_len, stride):
             y_gt.append(y[i + seq_len - 1])
+            mask_aligned.append(mask[i + seq_len - 1])
 
         y_gt = np.array(y_gt)
+        mask_aligned = np.array(mask_aligned)
 
-        return preds, y_gt
+        return preds, y_gt, mask_aligned
     
     def get_emg2pose(self):
 
@@ -322,13 +308,13 @@ class ExperimentRunner():
 
         return module
     
-    def train_emg2pose(self):
+    def train_emg2pose(self, epochs):
 
         print("\n -- Training emg2pose -- ")
 
         train_sessions_list = self._concat_sessions(self.user_train_dict)
 
-        checkpoint = train_subset(train_sessions_list, self.data_dir)
+        checkpoint = train_subset(train_sessions_list, self.data_dir, epochs)
 
         config = generate_hydra_config_from_overrides(
             overrides=[
@@ -444,35 +430,198 @@ class ExperimentRunner():
         pls_pred = pls_model.predict(x_features)
 
         return ridge_pred, svr_pred, pls_pred
+    
+    def _convert_metrics(self, results):
+        out = {}
+
+        for k, v in results.items():
+            val = v.item() if hasattr(v, "item") else v
+
+            if "mae" in k:
+                out[k + "_deg"] = np.degrees(val)
+
+            elif "vel" in k or "acc" in k or "jerk" in k:
+                out[k + "_deg"] = np.degrees(val)
+
+            elif "distance" in k:
+                out[k + "_mm"] = val
+
+            else:
+                out[k] = val
+
+        return out
+        
+    def _get_metrics(self, preds, joint_angles, no_ik_failure):
+        def to_tensor(x, is_mask=False):
+            import torch, numpy as np
+
+            if isinstance(x, np.ndarray):
+                t = torch.tensor(x)
+            elif isinstance(x, torch.Tensor):
+                t = x
+            else:
+                t = torch.tensor(x)
+
+            return t.bool() if is_mask else t.float()
+
+        # --- convert ---
+        pred = to_tensor(preds)
+        target = to_tensor(joint_angles)
+        mask = to_tensor(no_ik_failure, is_mask=True)
+
+        # --- fix shapes to (B, C, T) and (B, T) ---
+        try:
+            if pred.ndim == 2:   # (T, C)
+                pred = pred.T.unsqueeze(0)
+            if target.ndim == 2:
+                target = target.T.unsqueeze(0)
+            if mask.ndim == 1:
+                mask = mask.unsqueeze(0)
+        except:
+            pass
+
+        # --- align lengths (graceful degradation) ---
+        try:
+            T_pred = pred.shape[-1]
+            T_target = target.shape[-1]
+            T_mask = mask.shape[-1]
+
+            min_T = min(T_pred, T_target, T_mask)
+
+            if not (T_pred == T_target == T_mask):
+                print(f"[Warning] Length mismatch (pred={T_pred}, target={T_target}, mask={T_mask}) -> truncating to {min_T}")
+
+            pred = pred[..., :min_T]
+            target = target[..., :min_T]
+            mask = mask[..., :min_T]
+
+        except:
+            pass
+
+        # --- force CPU ---
+        try:
+            pred = pred.cpu()
+            target = target.cpu()
+            mask = mask.cpu()
+        except:
+            pass
+
+        # --- metrics ---
+        metrics = get_default_metrics()
+        results = {}
+
+        for m in metrics:
+            try:
+                results.update(m(pred, target, mask, stage="eval"))
+            except:
+                continue  # skip broken metric
+
+        return self._convert_metrics(results)
 
     def run(self):
-        self.user_train_dict =  self._load_data()
+        self.user_train_dict = self._load_data()
 
         print("\n=== DATA REGIME:", self.data_regime, "===")
         print(f"Users selected: {len(self.user_train_dict)}")
 
         for user, sessions in self.user_train_dict.items():
-            print(f"  {user.name}: {len(sessions)} session(s)")
+            print(user)
+            print(f"  {user.name}: {len(sessions)} session(s)")        
 
         # Train models
-        small_lstm_model = self.train_small_lstm()
+        small_lstm_model, seq_len, ds_factor, stride = self.train_small_lstm(epochs=1)
         meta_emg2pose_model = self.get_emg2pose()
-        my_emg2pose_model = self.train_emg2pose()
+        my_emg2pose_model = self.train_emg2pose(epochs=5)
         ridge_model, svr_model, pls_model = self.train_classic_ml()
 
-        # Run Inference on seen user
-        seen_eval_session = self._eval_seen_user
-        preds, y_gt = self.small_lstm_inference(seen_eval_session, small_lstm_model)
-        preds, joint_angles, no_ik_failure = self.emg2pose_inferece(seen_eval_session, meta_emg2pose_model)
-        preds, joint_angles, no_ik_failure = self.emg2pose_inferece(seen_eval_session, my_emg2pose_model)
-        ridge_pred, svr_pred, pls_pred = self.classic_ml_inference(seen_eval_session, ridge_model, svr_model, pls_model)
+        # -------- SEEN USER --------
+        print("\n===== SEEN USER =====")
 
-        # Run inference on unseen user
-        useen_eval_session = self._eval_unseen_user
-        preds, y_gt = self.small_lstm_inference(useen_eval_session, small_lstm_model)
-        preds, joint_angles, no_ik_failure = self.emg2pose_inferece(useen_eval_session, meta_emg2pose_model)
-        preds, joint_angles, no_ik_failure = self.emg2pose_inferece(useen_eval_session, my_emg2pose_model)
-        ridge_pred, svr_pred, pls_pred = self.classic_ml_inference(useen_eval_session, ridge_model, svr_model, pls_model)
+        seen_eval_session = self._eval_seen_user()
+        data = Emg2PoseSessionData(hdf5_path=seen_eval_session)
+
+        # --- Small LSTM ---
+        preds, y_gt, mask_lstm = self.small_lstm_inference(
+            data, small_lstm_model, seq_len, ds_factor, stride
+        )
+
+        print("\n[Small LSTM]")
+        print(self._get_metrics(preds, y_gt, mask_lstm))
+
+        # --- Meta model ---
+        preds, joint_angles, no_ik_failure = self.emg2pose_inferece(data, meta_emg2pose_model)
+        mask = data.no_ik_failure
+
+        print("\n[Meta EMG2Pose]")
+        print(self._get_metrics(preds, joint_angles, no_ik_failure))
+
+        # --- Your EMG2Pose ---
+        preds, joint_angles, no_ik_failure = self.emg2pose_inferece(data, my_emg2pose_model)
+
+        print("\n[My EMG2Pose]")
+        print(self._get_metrics(preds, joint_angles, no_ik_failure))
+
+        # --- Classical ML ---
+        ridge_pred, svr_pred, pls_pred = self.classic_ml_inference(
+            data, ridge_model, svr_model, pls_model
+        )
+
+        mask_30hz = downsample(mask.astype(float), 2000, 30) > 0.5
+
+        print("\n[Ridge]")
+        print(self._get_metrics(ridge_pred, y_gt, mask_30hz))
+
+        print("\n[SVR]")
+        print(self._get_metrics(svr_pred, y_gt, mask_30hz))
+
+        print("\n[PLS]")
+        print(self._get_metrics(pls_pred, y_gt, mask_30hz))
+
+
+        # -------- UNSEEN USER --------
+        print("\n===== UNSEEN USER =====")
+
+        unseen_eval_session = self._eval_unseen_user()
+        data = Emg2PoseSessionData(hdf5_path=unseen_eval_session)
+
+        # --- Small LSTM ---
+        preds, y_gt, mask_lstm = self.small_lstm_inference(
+            data, small_lstm_model, seq_len, ds_factor, stride
+        )
+
+        print("\n[Small LSTM]")
+        print(self._get_metrics(preds, y_gt, mask_lstm))
+
+        # --- Meta model ---
+        preds, joint_angles, no_ik_failure = self.emg2pose_inferece(data, meta_emg2pose_model)
+        mask = data.no_ik_failure
+
+        print("\n[Meta EMG2Pose]")
+        print(self._get_metrics(preds, joint_angles, no_ik_failure))
+
+        # --- Your EMG2Pose ---
+        preds, joint_angles, no_ik_failure = self.emg2pose_inferece(data, my_emg2pose_model)
+
+        print("\n[My EMG2Pose]")
+        print(self._get_metrics(preds, joint_angles, no_ik_failure))
+
+        # --- Classical ML ---
+        ridge_pred, svr_pred, pls_pred = self.classic_ml_inference(
+            data, ridge_model, svr_model, pls_model
+        )
+
+        mask_30hz = downsample(mask.astype(float), 2000, 30) > 0.5
+
+        print("\n[Ridge]")
+        print(self._get_metrics(ridge_pred, y_gt, mask_30hz))
+
+        print("\n[SVR]")
+        print(self._get_metrics(svr_pred, y_gt, mask_30hz))
+
+        print("\n[PLS]")
+        print(self._get_metrics(pls_pred, y_gt, mask_30hz))
+
+        
 
 if __name__ == "__main__":
     import argparse
