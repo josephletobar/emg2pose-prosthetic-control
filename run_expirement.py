@@ -32,6 +32,10 @@ class ExperimentRunner():
         # Dictionary containing user(s) and their respective session(s) to train models on
         self.user_train_dict = {}
 
+        # Sessions to evalaute on
+        self.seen_user_sesion
+        self.unseen_user_sesion
+
         # File locations
         self.data_dir = data_dir
         self.metadata_df = pd.read_csv(data_dir / "emg2pose_metadata.csv")
@@ -41,7 +45,7 @@ class ExperimentRunner():
             if p.is_dir()
         ])
 
-    # User and Session Selection Helpers
+    # Training User and Session Selection Helpers
     def _pick_one_user(self):
         rand_user = random.choice(self.user_list)
         return { rand_user: [] }
@@ -72,10 +76,45 @@ class ExperimentRunner():
             self.user_train_dict = self._pick_sessions(user_train_dict)
 
         elif self.data_regime == "full":
-            user_train_dict = {user: [] for user in self.user_list} 
+            held_out_user = random.choice(self.user_list) # pick one user to hold out
+            train_users = [u for u in self.user_list if u != held_out_user] # all others go into training
+
+            user_train_dict = {user: [] for user in train_users} 
             self.user_train_dict = self._pick_sessions(user_train_dict)
 
         return user_train_dict
+    
+    def _eval_seen_user(self):
+         # pick one random user
+        rand_user = random.choice(list(self.user_train_dict.keys()))
+
+        # get trained sessions for that user
+        sessions = self.user_train_dict[rand_user]
+
+        # pick one random session
+        rand_session = random.choice(sessions)
+
+        self.seen_user_sesion = rand_session
+        return rand_session
+
+    def _eval_unseen_user(self):
+        # users NOT used in training
+        unseen_users = [u for u in self.user_list if u not in self.user_train_dict]
+
+        if not unseen_users:
+            raise ValueError("No unseen users available (all users were used in training)")
+
+        # pick random unseen user
+        rand_user = random.choice(unseen_users)
+
+        # get sessions for that user
+        sessions = sorted(rand_user.glob("*.hdf5"))
+
+        # pick random session
+        rand_session = random.choice(sessions)
+
+        self.unseen_user_session = rand_session
+        return rand_session
     
     # Helper to concatenate sessions across users
     def _concat_sessions(self, user_train_dict):
@@ -421,12 +460,19 @@ class ExperimentRunner():
         my_emg2pose_model = self.train_emg2pose()
         ridge_model, svr_model, pls_model = self.train_classic_ml()
 
-        # # Run Inference
-        # data = None
-        # preds, y_gt = self.small_lstm_inference(data, small_lstm_model)
-        # preds, joint_angles, no_ik_failure = self.emg2pose_inferece(data, meta_emg2pose_model)
-        # preds, joint_angles, no_ik_failure = self.emg2pose_inferece(data, my_emg2pose_model)
-        # ridge_pred, svr_pred, pls_pred = self.classic_ml_inference(data, ridge_model, svr_model, pls_model)
+        # Run Inference on seen user
+        seen_eval_session = self._eval_seen_user
+        preds, y_gt = self.small_lstm_inference(seen_eval_session, small_lstm_model)
+        preds, joint_angles, no_ik_failure = self.emg2pose_inferece(seen_eval_session, meta_emg2pose_model)
+        preds, joint_angles, no_ik_failure = self.emg2pose_inferece(seen_eval_session, my_emg2pose_model)
+        ridge_pred, svr_pred, pls_pred = self.classic_ml_inference(seen_eval_session, ridge_model, svr_model, pls_model)
+
+        # Run inference on unseen user
+        useen_eval_session = self._eval_unseen_user
+        preds, y_gt = self.small_lstm_inference(useen_eval_session, small_lstm_model)
+        preds, joint_angles, no_ik_failure = self.emg2pose_inferece(useen_eval_session, meta_emg2pose_model)
+        preds, joint_angles, no_ik_failure = self.emg2pose_inferece(useen_eval_session, my_emg2pose_model)
+        ridge_pred, svr_pred, pls_pred = self.classic_ml_inference(useen_eval_session, ridge_model, svr_model, pls_model)
 
 if __name__ == "__main__":
     import argparse
