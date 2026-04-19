@@ -10,6 +10,8 @@ from experiments.load_data import load_data, concat_data
 from experiments.metrics import get_experiment_metrics
 from experiments.inference import small_lstm_inference, classic_ml_inference, emg2pose_inferece
 
+DEFAULT_DATA_DIR = Path("/Volumes") / "Crucial X9" # local machine
+
 class ExperimentRunner():
 
     def __init__(self, data_regime, data_dir):
@@ -126,8 +128,6 @@ class ExperimentRunner():
 
 if __name__ == "__main__":
     import argparse
-
-    DEFAULT_DATA_DIR = Path("/Volumes") / "Crucial X9" # local machine
 
     parser = argparse.ArgumentParser()
     parser.add_argument(

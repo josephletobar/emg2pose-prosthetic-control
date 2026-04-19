@@ -118,22 +118,35 @@ def _train_subset(sessions, data_download_dir, epochs=100):
     ckpt_name = f"checkpoint_{timestamp}"
 
     # --- run training on full subset ---
+    # subprocess.run([
+    #     "python", "-m", "emg2pose.train",
+    #     "train=True",
+    #     "eval=True",
+    #     "experiment=tracking_vemg2pose",
+    #     f"trainer.max_epochs={epochs}",
+    #     f"+callbacks.1.dirpath={ckpt_dir}",
+    #     f"+callbacks.1.filename={ckpt_name}",
+    #     f"data_location={TMP_DIR}"
+    # ])
+
     subprocess.run([
         "python", "-m", "emg2pose.train",
         "train=True",
         "eval=True",
         "experiment=tracking_vemg2pose",
+        "+trainer.accelerator=cpu",
+        "+trainer.devices=1",
         f"trainer.max_epochs={epochs}",
         f"+callbacks.1.dirpath={ckpt_dir}",
         f"+callbacks.1.filename={ckpt_name}",
         f"data_location={TMP_DIR}"
-    ])
+    ], check=True)
 
     final_ckpt = ckpt_dir / f"{ckpt_name}.ckpt"
     return final_ckpt
 
 # LSTM architecture and training; returns the trained model
-def train_small_lstm(emg, joint_angles, epochs=5):
+def train_small_lstm(emg, joint_angles, epochs=1):
 
     X = emg
     y = joint_angles
