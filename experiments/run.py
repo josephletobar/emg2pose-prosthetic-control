@@ -5,11 +5,10 @@ import pandas as pd
 import numpy as np
 from emg2pose.data import Emg2PoseSessionData
 
-from experiments.trainers import get_emg2pose, train_small_lstm, train_emg2pose, train_classic_ml
-from experiments.load_data import pick_one_user, pick_sessions, random_subset
+from experiments.trainers import get_emg2pose, train_small_lstm, train_emg2pose, train_classic_ml, build_features
+from experiments.load_data import load_data, concat_data
 from experiments.metrics import get_experiment_metrics
 from experiments.inference import small_lstm_inference, classic_ml_inference, emg2pose_inferece
-
 
 class ExperimentRunner():
 
@@ -34,30 +33,7 @@ class ExperimentRunner():
             if p.is_dir()
         ])
 
-    # Load Data Based on Training Regime
-    def _load_data(self):
-        if self.data_regime == "single_session":
-            user_train_dict = pick_one_user(self.user_list)
-            self.user_train_dict = pick_sessions(self.data_regime, user_train_dict)
-
-        elif self.data_regime == "single_user":
-            user_train_dict = pick_one_user(self.user_list)
-            self.user_train_dict = pick_sessions(self.data_regime, user_train_dict)
-
-        elif self.data_regime == "multi_user":
-            user_train_dict = random_subset(self.user_list, k=len(self.user_list) // 2)
-            self.user_train_dict = pick_sessions(self.data_regime, user_train_dict)
-
-        elif self.data_regime == "full":
-            held_out_user = random.choice(self.user_list) # pick one user to hold out
-            train_users = [u for u in self.user_list if u != held_out_user] # all others go into training
-
-            user_train_dict = {user: [] for user in train_users} 
-            self.user_train_dict = pick_sessions(self.data_regime, user_train_dict)
-
-        return user_train_dict
-    
-    def _eval_seen_user(self):
+    def eval_seen_user(self):
         # pick one random user
         rand_user = random.choice(list(self.user_train_dict.keys()))
 
@@ -70,7 +46,7 @@ class ExperimentRunner():
         self.seen_user_sesion = rand_session
         return rand_session
 
-    def _eval_unseen_user(self):
+    def eval_unseen_user(self):
         # users NOT used in training
         unseen_users = [u for u in self.user_list if u not in self.user_train_dict]
 
@@ -89,10 +65,9 @@ class ExperimentRunner():
         self.unseen_user_session = rand_session
         return rand_session
     
-    
     def run(self):
 
-        self.user_train_dict = self._load_data()
+        self.user_train_dict = load_data(self.data_regime, self.user_list)
 
         print("\n=== DATA REGIME:", self.data_regime, "===")
         print(f"Users selected: {len(self.user_train_dict)}")
@@ -102,15 +77,19 @@ class ExperimentRunner():
             print(f"  {user.name}: {len(sessions)} session(s)")        
 
         # Train models
-        small_lstm_model, seq_len, ds_factor, stride = train_small_lstm(self.user_train_dict, epochs=1)
+        emg, joint_angles_lstm = concat_data(self.user_train_dict)
+        small_lstm_model, seq_len, ds_factor, stride = train_small_lstm(emg, joint_angles_lstm, epochs=1)
+
         meta_emg2pose_model = get_emg2pose(self.data_dir)
         my_emg2pose_model = train_emg2pose(self.user_train_dict, self.data_dir, epochs=5)
-        ridge_model, svr_model, pls_model = train_classic_ml(self.user_train_dict)
+
+        emg_features, joint_angles_ml = build_features(self.user_train_dict)
+        ridge_model, svr_model, pls_model = train_classic_ml(emg_features, joint_angles_ml)
 
         # Run eval
         for label, session_function in [
-            ("SEEN USER", self._eval_seen_user),
-            ("UNSEEN USER", self._eval_unseen_user),
+            ("SEEN USER", self.eval_seen_user),
+            ("UNSEEN USER", self.eval_unseen_user),
             ]:
             print(f"\n===== {label} EVAL =====")
 

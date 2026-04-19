@@ -23,9 +23,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.pipeline import Pipeline
 from sklearn.cross_decomposition import PLSRegression
 
-# Helper to concatenate sessions across users
 def _concat_sessions(user_train_dict):
-
     train_sessions_list = []
 
     # Loop over users and their respective sessions
@@ -135,20 +133,10 @@ def _train_subset(sessions, data_download_dir, epochs=100):
     return final_ckpt
 
 # LSTM architecture and training; returns the trained model
-def train_small_lstm(user_train_dict, epochs=5):
+def train_small_lstm(emg, joint_angles, epochs=5):
 
-    print("\n-- Training LSTM --")
-
-    X_all, y_all = [], []
-
-    for user, sessions in user_train_dict.items():
-        for session in sessions:
-            data = Emg2PoseSessionData(hdf5_path=session)
-            X_all.append(data['emg'])
-            y_all.append(data['joint_angles'])
-
-    X = np.concatenate(X_all, axis=0)
-    y = np.concatenate(y_all, axis=0)
+    X = emg
+    y = joint_angles
 
     ds_factor = 4
     X = X[::ds_factor]
@@ -275,10 +263,7 @@ def train_emg2pose(user_train_dict, data_dir, epochs):
 
     return module
 
-def train_classic_ml(user_train_dict):
-
-    print("\n-- Training Classical ML Methods -- ")
-
+def build_features(user_train_dict):
     train_sessions_list = _concat_sessions(user_train_dict) # list of all training sessions
 
     X_all, y_all = [], [] # build feature dataset
@@ -292,6 +277,15 @@ def train_classic_ml(user_train_dict):
 
     X = np.concatenate(X_all, axis=0)
     y = np.concatenate(y_all, axis=0)
+
+    return X, y
+
+def train_classic_ml(emg_features, joint_angles):
+
+    print("\n-- Training Classical ML Methods -- ")
+
+    X = emg_features
+    y = joint_angles
 
     # --- split (preserve time order) ---
     split_idx = int(0.8 * len(X))

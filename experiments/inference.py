@@ -1,6 +1,7 @@
 import numpy as np
 import torch
 from emg2pose.feature_extraction import features
+from emg2pose.data import Emg2PoseSessionData
 
 def small_lstm_inference(data, model, seq_len, ds_factor, stride):
 
@@ -41,7 +42,7 @@ def small_lstm_inference(data, model, seq_len, ds_factor, stride):
 
     return preds, y_gt, mask_aligned
 
-def emg2pose_inferece(data, module):
+def emg2pose_inferece(data: Emg2PoseSessionData, module):
 
     session = data
 
