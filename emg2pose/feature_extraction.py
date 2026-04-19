@@ -63,6 +63,13 @@ def features(data: Emg2PoseSessionData):
     mask_out = np.array(mask_out)
 
     return X_feats, y_out, mask_out
+
+def features_window(x_win):
+    """
+    x_win: (window, C)
+    """
+    feats = _emg_features(x_win)
+    return feats  # (feature_dim,)
     
 if __name__ == "__main__":
     from pathlib import Path

@@ -1,6 +1,6 @@
 import numpy as np
 import torch
-from emg2pose.feature_extraction import features
+from emg2pose.feature_extraction import features, features_window
 from emg2pose.data import Emg2PoseSessionData
 
 def small_lstm_inference(data, model, seq_len, ds_factor, stride):
@@ -41,6 +41,23 @@ def small_lstm_inference(data, model, seq_len, ds_factor, stride):
     mask_aligned = np.array(mask_aligned)
 
     return preds, y_gt, mask_aligned
+
+def lstm_window_inference(window, model, ds_factor):
+    """
+    window: (T, C)
+    """
+    # downsample FIRST
+
+    window = window[::ds_factor]
+
+    model.eval()
+
+    x = torch.tensor(window[None, ...], dtype=torch.float32)  # (1, T, C)
+
+    with torch.no_grad():
+        pred = model(x).cpu().numpy()  # (1, output_dim)
+
+    return pred[0]  # (output_dim,)
 
 def emg2pose_inferece(data: Emg2PoseSessionData, module):
 
@@ -114,3 +131,18 @@ def classic_ml_inference(data, ridge_model, svr_model, pls_model):
     pls_pred = pls_model.predict(x_features)
 
     return ridge_pred, svr_pred, pls_pred, gt, mask
+
+def ridge_window_inference(window, ridge_model):
+    x_features = features_window(window)
+    x_features = x_features[None, :]
+    return ridge_model.predict(x_features)[0]
+
+def svr_window_inference(window, svr_model):
+    x_features = features_window(window)
+    x_features = x_features[None, :]
+    return svr_model.predict(x_features)[0]
+
+def pls_window_inference(window, pls_model):
+    x_features = features_window(window)
+    x_features = x_features[None, :]
+    return pls_model.predict(x_features)[0]
