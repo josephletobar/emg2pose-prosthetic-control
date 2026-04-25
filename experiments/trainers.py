@@ -1,10 +1,13 @@
 from pathlib import Path
 import os
 import subprocess
+import time
 import shutil
+import sys
 import pandas as pd
 from datetime import datetime
 from pathlib import Path
+from tqdm import tqdm
 
 import numpy as np
 import torch
@@ -140,7 +143,11 @@ def _train_subset(sessions, data_download_dir, epochs=100):
         f"+callbacks.1.dirpath={ckpt_dir}",
         f"+callbacks.1.filename={ckpt_name}",
         f"data_location={TMP_DIR}"
-    ], check=True)
+    ],
+        check=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL
+    )
 
     final_ckpt = ckpt_dir / f"{ckpt_name}.ckpt"
     return final_ckpt
@@ -201,26 +208,27 @@ def train_small_lstm(emg, joint_angles, epochs=1):
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
     loss_fn = nn.MSELoss()
 
-    for epoch in range(epochs):
+    last_loss = None
+
+    for epoch in tqdm(range(epochs), desc="Training LSTM"):
+
         for xb, yb in train_loader:
             pred = model(xb)
             loss = loss_fn(pred, yb)
-
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
+            last_loss = loss
 
-        print(f"Epoch {epoch}: loss = {loss.item():.4f}")
+        tqdm.write(f"Epoch {epoch}: loss = {last_loss.item():.4f}")
 
-    print("-- Finished Training LSTM -- \n")
+    print(f"[LSTM] final_loss = {last_loss.item():.4f}")
 
     # IMPORTANT: return params for alignment
     return model, seq_len, ds_factor, stride
 
 
 def get_emg2pose(data_dir):
-
-    print("\n-- Loading Meta's Pretrained Model -- ")
 
     checkpoint_dir = Path(data_dir) / "emg2pose_model_checkpoints"
 
@@ -246,13 +254,9 @@ def get_emg2pose(data_dir):
         lr_scheduler=config.lr_scheduler,
     )
 
-    print("-- Loaded Meta's Pretrained Model -- \n")
-
     return module
 
 def train_emg2pose(user_train_dict, data_dir, epochs):
-
-    print("\n-- Training emg2pose -- ")
 
     train_sessions_list = _concat_sessions(user_train_dict)
 
@@ -272,8 +276,6 @@ def train_emg2pose(user_train_dict, data_dir, epochs):
         lr_scheduler=config.lr_scheduler,
     )
     
-    print("--Trained emg2pose -- \n ")
-
     return module
 
 def build_features(user_train_dict):
@@ -294,8 +296,6 @@ def build_features(user_train_dict):
     return X, y
 
 def train_classic_ml(emg_features, joint_angles):
-
-    print("\n-- Training Classical ML Methods -- ")
 
     X = emg_features
     y = joint_angles
@@ -326,7 +326,5 @@ def train_classic_ml(emg_features, joint_angles):
     # --- PLS  ---
     pls_model = PLSRegression(n_components=10)  # try 5–20 range if needed
     pls_model.fit(X_train, y_train)
-
-    print("-- Trained Classical ML Methods -- \n")
 
     return ridge_model, svr_model, pls_model

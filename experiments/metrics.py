@@ -21,9 +21,13 @@ class ExperimentMetrics:
         return t.bool() if is_mask else t.float()
 
     def _compute(self):
+
         pred = self._to_tensor(self.preds)
         target = self._to_tensor(self.joint_angles)
         mask = self._to_tensor(self.no_ik_failure, is_mask=True)
+
+        print("pred shape:", pred.shape)
+        print("target shape:", target.shape)
 
         # shape fix
         if pred.ndim == 2:
@@ -124,8 +128,6 @@ class ExperimentMetrics:
             axes[i].legend()
 
         plt.tight_layout()
-        plt.show()
-
         return fig
 
 
@@ -159,7 +161,7 @@ class ExperimentMetrics:
 
         frames = Parallel(n_jobs=8)(
             delayed(render_frame)(gt[i], pred[i])
-            for i in tqdm(range(len(gt)))
+            for i in tqdm(list(range(len(gt))), desc="Rendering")
         )
 
         frames = np.array(frames)
@@ -168,16 +170,16 @@ class ExperimentMetrics:
 
         return frames
         
-    def save_outputs(self, save_dir, name, native_fs):
+    def save_outputs(self, save_dir, native_fs):
         import os
         os.makedirs(save_dir, exist_ok=True)
 
         # save plot
         fig = self.plot(native_fs)  # modify plot() to return fig instead of just showing
-        fig.savefig(f"{save_dir}/{name}_plot.png", bbox_inches="tight")
+        fig.savefig(f"{save_dir}/_plot.png", bbox_inches="tight")
 
         # save video
-        self.save_video(f"{save_dir}/{name}_visual.mp4", native_fs)
+        self.save_video(f"{save_dir}/_visual.mp4", native_fs)
 
     @property
     def all(self):
@@ -195,7 +197,7 @@ class ExperimentMetrics:
         }
     
 
-def save_experiment_table(rows, save_dir, name="results"):
+def save_metrics_table(rows, save_dir, name="metrics"):
     import os
     import pandas as pd
 

@@ -16,6 +16,7 @@ class EmgStreamer:
         return sample
     
 def stream_inference(data, func, model, WINDOW, STRIDE=50, MAX_STEPS=500, WARMUP=10, **kwargs):
+    from tqdm import tqdm
 
     stream = EmgStreamer(data)
     size = data['emg'].shape[0]
@@ -25,7 +26,8 @@ def stream_inference(data, func, model, WINDOW, STRIDE=50, MAX_STEPS=500, WARMUP
     pred_buf = []
     count = 0
 
-    for i in range(size):
+    max_iters = min(size, MAX_STEPS * STRIDE)
+    for i in tqdm(range(max_iters), desc="Streaming"):
 
         if count > MAX_STEPS: break
 
@@ -61,3 +63,34 @@ def stream_inference(data, func, model, WINDOW, STRIDE=50, MAX_STEPS=500, WARMUP
         "median_latency_ms": median
     }
             
+
+def save_latency_table(rows, save_dir, name="latency"):
+    import os
+    import pandas as pd
+
+    os.makedirs(save_dir, exist_ok=True)
+
+    df = pd.DataFrame(rows)
+
+    # rename to paper-style headers
+    df = df.rename(columns={
+        "mean_latency_ms": "Mean Latency (ms)",
+        "median_latency_ms": "Median Latency (ms)",
+    })
+
+    # enforce column order
+    cols = [
+        "Model",
+        "Mean Latency (ms)",
+        "Median Latency (ms)",
+    ]
+    cols = [c for c in cols if c in df.columns]
+    df = df[cols]
+
+    csv_path = f"{save_dir}/{name}.csv"
+    latex_path = f"{save_dir}/{name}.tex"
+
+    df.to_csv(csv_path, index=False)
+    df.to_latex(latex_path, index=False)
+
+    return df

@@ -1,5 +1,6 @@
 import numpy as np
 import torch
+from tqdm import tqdm
 from emg2pose.feature_extraction import features, features_window
 from emg2pose.data import Emg2PoseSessionData
 
@@ -18,7 +19,8 @@ def small_lstm_inference(data, model, seq_len, ds_factor, stride):
     mask = mask_raw[::ds_factor]
 
     # --- build predictions ---
-    for i in range(0, len(X) - seq_len, stride):
+    total = (len(X) - seq_len) // stride
+    for i in tqdm(range(0, len(X) - seq_len, stride), total=total, desc="LSTM inference"):
         window = X[i:i+seq_len]
         window = torch.tensor(window[None, ...], dtype=torch.float32)
 
@@ -33,6 +35,7 @@ def small_lstm_inference(data, model, seq_len, ds_factor, stride):
     y_gt = []
     mask_aligned = []
 
+    total_gt = (len(y) - seq_len) // stride
     for i in range(0, len(y) - seq_len, stride):
         y_gt.append(y[i + seq_len - 1])
         mask_aligned.append(mask[i + seq_len - 1])

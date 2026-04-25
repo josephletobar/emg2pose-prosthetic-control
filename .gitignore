@@ -167,3 +167,5 @@ data/
 
 notebooks/**/*.mp4
 notebooks/**/*.png
+
+results
