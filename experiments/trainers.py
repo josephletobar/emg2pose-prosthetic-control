@@ -36,7 +36,7 @@ def _concat_sessions(user_train_dict):
 
     return train_sessions_list
 
-def _train_subset(sessions, data_download_dir, epochs=100):
+def _train_subset(sessions, data_download_dir, epochs=100, start_checkpoint=None):
     """
     Prepares a training dataset from a subset of sessions.
 
@@ -120,19 +120,7 @@ def _train_subset(sessions, data_download_dir, epochs=100):
 
     ckpt_name = f"checkpoint_{timestamp}"
 
-    # --- run training on full subset ---
-    # subprocess.run([
-    #     "python", "-m", "emg2pose.train",
-    #     "train=True",
-    #     "eval=True",
-    #     "experiment=tracking_vemg2pose",
-    #     f"trainer.max_epochs={epochs}",
-    #     f"+callbacks.1.dirpath={ckpt_dir}",
-    #     f"+callbacks.1.filename={ckpt_name}",
-    #     f"data_location={TMP_DIR}"
-    # ])
-
-    subprocess.run([
+    cmd = [
         "python", "-m", "emg2pose.train",
         "train=True",
         "eval=True",
@@ -143,11 +131,13 @@ def _train_subset(sessions, data_download_dir, epochs=100):
         f"+callbacks.1.dirpath={ckpt_dir}",
         f"+callbacks.1.filename={ckpt_name}",
         f"data_location={TMP_DIR}"
-    ],
-        check=True,
-        # stdout=subprocess.DEVNULL,
-        # stderr=subprocess.DEVNULL
-    )
+    ]
+
+    if start_checkpoint is not None:
+        cmd.append(f"checkpoint={start_checkpoint}")
+        cmd.append("optimizer.lr=5e-5")
+
+    subprocess.run(cmd, check=True)
 
     final_ckpt = ckpt_dir / f"{ckpt_name}.ckpt"
     return final_ckpt
@@ -255,6 +245,32 @@ def get_emg2pose(data_dir):
     )
 
     return module
+
+def fine_tune_emg2pose(user_train_dict, data_dir, epochs=10):
+    train_sessions_list = _concat_sessions(user_train_dict)
+
+    meta_ckpt = Path(data_dir) / "emg2pose_model_checkpoints" / "regression_vemg2pose.ckpt"
+
+    checkpoint = _train_subset(
+        train_sessions_list,
+        data_dir,
+        epochs,
+        start_checkpoint=meta_ckpt,
+    )
+
+    config = generate_hydra_config_from_overrides(
+        overrides=[
+            "experiment=regression_vemg2pose",
+            f"checkpoint={checkpoint}",
+        ]
+    )
+
+    return Emg2PoseModule.load_from_checkpoint(
+        config.checkpoint,
+        network=config.network,
+        optimizer=config.optimizer,
+        lr_scheduler=config.lr_scheduler,
+    )
 
 def train_emg2pose(user_train_dict, data_dir, epochs):
 

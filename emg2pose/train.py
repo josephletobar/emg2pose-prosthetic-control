@@ -98,6 +98,15 @@ def train(
         log.info(f"Instantiating LightningModule {Emg2PoseModule}")
         module = make_lightning_module(config)
 
+    # === FREEZE FOR FINE-TUNING ===
+    if config.checkpoint is not None:
+        for name, param in module.named_parameters():
+            param.requires_grad = False
+
+        for name, param in module.named_parameters():
+            if "model.decoder.mlp_out" in name:
+                param.requires_grad = True
+
     log.info(f"Instantiating LightningDataModule {config.datamodule}")
     datamodule = make_data_module(config)
 

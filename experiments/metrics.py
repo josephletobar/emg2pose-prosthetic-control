@@ -26,8 +26,8 @@ class ExperimentMetrics:
         target = self._to_tensor(self.joint_angles)
         mask = self._to_tensor(self.no_ik_failure, is_mask=True)
 
-        print("pred shape:", pred.shape)
-        print("target shape:", target.shape)
+        # print("pred shape:", pred.shape)
+        # print("target shape:", target.shape)
 
         # shape fix
         if pred.ndim == 2:

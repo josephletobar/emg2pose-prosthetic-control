@@ -6,24 +6,21 @@ from emg2pose.data import Emg2PoseSessionData
 def load_data(data_regime, user_list):
     if data_regime == "single_session" or data_regime == "test":
         user_train_dict = pick_one_user(user_list)
-        user_train_dict = pick_sessions(data_regime, user_train_dict)
+        user_train_dict, held_out_session = pick_sessions(data_regime, user_train_dict)
 
     elif data_regime == "single_user":
         user_train_dict = pick_one_user(user_list)
-        user_train_dict = pick_sessions(data_regime, user_train_dict)
+        user_train_dict, held_out_session = pick_sessions(data_regime, user_train_dict)
 
     elif data_regime == "multi_user":
         user_train_dict = random_subset(user_list, k=len(user_list) // 2)
-        user_train_dict = pick_sessions(data_regime, user_train_dict)
+        user_train_dict, held_out_session = pick_sessions(data_regime, user_train_dict)
 
     elif data_regime == "full":
-        held_out_user = random.choice(user_list) # pick one user to hold out
-        train_users = [u for u in user_list if u != held_out_user] # all others go into training
+        user_train_dict = {user: [] for user in user_list} 
+        user_train_dict, held_out_session = pick_sessions(data_regime, user_train_dict)
 
-        user_train_dict = {user: [] for user in train_users} 
-        user_train_dict = pick_sessions(data_regime, user_train_dict)
-
-    return user_train_dict
+    return user_train_dict, held_out_session
 
 # Training User and Session Selection Helpers
 def _user_has_valid_session(user):
@@ -56,6 +53,11 @@ def random_subset(user_list, k):
     return selected
 
 def pick_sessions(data_regime, user_train_dict):
+    held_out_session = None
+
+    # pick random user to have a session held out for seen-user-eval
+    rand_user = random.choice(list(user_train_dict.keys()))
+
     for user in user_train_dict:
         all_sessions = sorted(user.glob("*.hdf5"))
 
@@ -73,9 +75,13 @@ def pick_sessions(data_regime, user_train_dict):
         if data_regime == "single_session" or data_regime == "test":
             user_train_dict[user] = [random.choice(valid_sessions)]
         else:
-            user_train_dict[user] = valid_sessions
+            if user == rand_user:
+                held_out_session = random.choice(valid_sessions)
+                user_train_dict[user] = [s for s in valid_sessions if s != held_out_session]
+            else:
+                user_train_dict[user] = valid_sessions
 
-    return user_train_dict
+    return user_train_dict, held_out_session
 
 # Helper to concatenate sessions across users
 def concat_data(user_train_dict):

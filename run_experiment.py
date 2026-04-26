@@ -44,6 +44,7 @@ class ExperimentRunner():
 
         # Sessions to evalaute on
         self.seen_user_session = []
+        self.held_out_session = None
         self.unseen_user_session = []
 
         # File locations
@@ -105,17 +106,8 @@ class ExperimentRunner():
         if self.data_regime == "test":
             return (self.user_train_dict[next(iter(self.user_train_dict))])[0]
 
-        # pick one random user in train dict
-        rand_user = random.choice(list(self.user_train_dict.keys()))
-
-        # get trained sessions for that user
-        sessions = self.user_train_dict[rand_user]
-
-        # pick one random session
-        rand_session = random.choice(sessions)
-
-        self.seen_user_session = rand_session
-        return rand_session
+        # a held out session from those we trained on
+        return self.held_out_session
 
     def eval_unseen_user(self):
         # users NOT used in training
@@ -166,10 +158,13 @@ class ExperimentRunner():
     
     def run(self):
 
-        self.user_train_dict = load_data(self.data_regime, self.user_list)
+        self.user_train_dict, self.held_out_session = load_data(self.data_regime, self.user_list)
 
         Path(f"{self.save_dir}/train_dict.json").write_text(
-            json.dumps({str(k): [str(s) for s in v] for k, v in self.user_train_dict.items()}, indent=2)
+            json.dumps({
+                "train": {str(k): [str(s) for s in v] for k, v in self.user_train_dict.items()},
+                "held_out": str(self.held_out_session)
+            }, indent=2)
         )
 
         print("\n=== DATA REGIME:", self.data_regime, "===")
@@ -221,7 +216,6 @@ class ExperimentRunner():
             # Meta EMG2Pose
             with timer("Meta emg2pose"):
                 preds, joint_angles, no_ik_failure = emg2pose_inferece(self.eval_data, meta_emg2pose_model)
-                print("\n[Meta EMG2Pose]")
                 self.model_metrics(label, "meta_emg2pose", meta_emg2pose_model, preds, joint_angles, no_ik_failure)
 
             # # My EMG2Pose 
