@@ -165,8 +165,7 @@ class ExperimentRunner():
         print()
 
         for user, sessions in self.user_train_dict.items():
-            print(user)
-            print(f"  {user.name}: {len(sessions)} session(s)")        
+            print(f"  {user.name}: {len(sessions)} session(s)\n")        
 
         # Train models
         with timer("LSTM Training"):
