@@ -311,10 +311,24 @@ def build_features(user_train_dict):
 
     return X, y
 
+def _add_lags(X, y, lags=2):
+    X_new = []
+    y_new = []
+
+    for t in range(lags, len(X)):
+        lagged_y = y[t-lags:t][::-1].reshape(-1)
+        X_new.append(np.concatenate([X[t], lagged_y]))
+        y_new.append(y[t])
+
+    return np.array(X_new), np.array(y_new)
+
 def train_classic_ml(emg_features, joint_angles):
 
     X = emg_features
     y = joint_angles
+
+    # --- ARX augmentation ---
+    X, y = _add_lags(X, y, lags=2)
 
     # --- split (preserve time order) ---
     split_idx = int(0.8 * len(X))

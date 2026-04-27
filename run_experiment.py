@@ -200,12 +200,12 @@ class ExperimentRunner():
         print()        
 
         # Train models
-        with timer("LSTM Training"):
-            emg, joint_angles_lstm = concat_data(self.user_train_dict)
-            small_lstm_model, seq_len, ds_factor, stride = train_small_lstm(emg, joint_angles_lstm, epochs=5)
+        # with timer("LSTM Training"):
+        #     emg, joint_angles_lstm = concat_data(self.user_train_dict)
+        #     small_lstm_model, seq_len, ds_factor, stride = train_small_lstm(emg, joint_angles_lstm, epochs=5)
 
-        with timer("Get Meta emg2pose"):
-            meta_emg2pose_model = get_emg2pose(self.data_dir)
+        # with timer("Get Meta emg2pose"):
+        #     meta_emg2pose_model = get_emg2pose(self.data_dir)
 
         # with timer("emg2pose Training"):
         #     my_emg2pose_model = train_emg2pose(self.user_train_dict, self.data_dir, epochs=5)
@@ -224,25 +224,29 @@ class ExperimentRunner():
 
             eval_session = session_function()
             self.eval_data = Emg2PoseSessionData(hdf5_path=eval_session)
+            if hasattr(ridge_model, "_prev"):
+                del ridge_model._prev
+            if hasattr(pls_model, "_prev"):
+                del pls_model._prev
             frames = joint_angles_to_frames_parallel(downsample(self.eval_data["joint_angles"], 2000, 30)[0:250])
             frames = remove_alpha_channel(frames)
             media.write_video(f"{self.save_dir}/ground_truth_{label}_eval.mp4", frames, fps=30)
             print()
         
             # Small LSTM
-            with timer("LSTM"):
-                lstm_preds, lstm_gt, mask_lstm = small_lstm_inference(
-                    self.eval_data, small_lstm_model, seq_len, ds_factor, stride
-                )
-                self.MODEL_CONFIGS["lstm"]["WINDOW"] = seq_len
-                self.MODEL_CONFIGS["lstm"]["STRIDE"] = stride
+            # with timer("LSTM"):
+            #     lstm_preds, lstm_gt, mask_lstm = small_lstm_inference(
+            #         self.eval_data, small_lstm_model, seq_len, ds_factor, stride
+            #     )
+            #     self.MODEL_CONFIGS["lstm"]["WINDOW"] = seq_len
+            #     self.MODEL_CONFIGS["lstm"]["STRIDE"] = stride
 
-                self.model_metrics(label, "lstm", small_lstm_model, lstm_preds, lstm_gt, mask_lstm, ds_factor=ds_factor)
+            #     self.model_metrics(label, "lstm", small_lstm_model, lstm_preds, lstm_gt, mask_lstm, ds_factor=ds_factor)
 
-            # Meta EMG2Pose
-            with timer("Meta emg2pose"):
-                preds, joint_angles, no_ik_failure = emg2pose_inferece(self.eval_data, meta_emg2pose_model)
-                self.model_metrics(label, "meta_emg2pose", meta_emg2pose_model, preds, joint_angles, no_ik_failure)
+            # # Meta EMG2Pose
+            # with timer("Meta emg2pose"):
+            #     preds, joint_angles, no_ik_failure = emg2pose_inferece(self.eval_data, meta_emg2pose_model)
+            #     self.model_metrics(label, "meta_emg2pose", meta_emg2pose_model, preds, joint_angles, no_ik_failure)
 
             # # My EMG2Pose 
             # with timer("My emg2pose"):
