@@ -12,11 +12,18 @@ from emg2pose.data import Emg2PoseSessionData
 from emg2pose.visualization import remove_alpha_channel, joint_angles_to_frames_parallel
 from emg2pose.utils import downsample
 
-from experiments.trainers import get_emg2pose, train_small_lstm, train_emg2pose, train_classic_ml, build_features
-from experiments.load_data import load_data, concat_data
+from experiments.data_helpers import load_data, concat_data
 from experiments.metrics import ExperimentMetrics, save_metrics_table
 from experiments.stream_emg import stream_inference, save_latency_table
-from experiments.inference import small_lstm_inference, classic_ml_inference, emg2pose_inferece, pls_window_inference, svr_window_inference, lstm_window_inference, ridge_window_inference, emg2pose_window_inference, features_window
+
+from experiments.train_models.classic_ml import train_classic_ml, build_features
+from experiments.train_models.conv_lstm import train_small_lstm
+from experiments.train_models.emg2pose import get_emg2pose
+
+from experiments.models_inference.classic_ml import pls_window_inference, ridge_window_inference, features_window, classic_ml_inference
+from experiments.models_inference.conv_lstm import lstm_window_inference, small_lstm_inference
+from experiments.models_inference.emg2pose import emg2pose_inferece, emg2pose_window_inference
+
 
 DEFAULT_DATA_DIR = Path("/Volumes") / "Crucial X9" # local machine
 
@@ -56,6 +63,8 @@ class ExperimentRunner():
             if p.is_dir()
         ])
 
+        
+
         self.MODEL_CONFIGS = {
             "lstm": {
                 "native_fs": 500,
@@ -71,7 +80,7 @@ class ExperimentRunner():
             },
             "svr": {
                 "native_fs": 30,
-                "window_fn": svr_window_inference,
+                "window_fn": None,
                 "WINDOW": 500,
                 "STRIDE": 67,
             },

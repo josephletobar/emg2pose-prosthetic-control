@@ -101,3 +101,14 @@ def concat_data(user_train_dict):
     y = np.concatenate(y_all, axis=0)
 
     return X, y
+
+# Helper to concat sessions across users as a list
+def _concat_sessions(user_train_dict):
+    train_sessions_list = []
+
+    # Loop over users and their respective sessions
+    for user, sessions in user_train_dict.items():
+        for session in sessions:
+            train_sessions_list.append(session)
+
+    return train_sessions_list
