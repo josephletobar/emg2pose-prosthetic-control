@@ -2,7 +2,7 @@ from tqdm import tqdm
 import torch
 import numpy as np
 
-def small_lstm_inference(data, model, seq_len, ds_factor, stride):
+def conv_lstm_inference(data, model, seq_len, ds_factor, stride):
 
     X_raw = data['emg']
     y_raw = data['joint_angles']

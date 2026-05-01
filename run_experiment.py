@@ -17,11 +17,11 @@ from experiments.metrics import ExperimentMetrics, save_metrics_table
 from experiments.stream_emg import stream_inference, save_latency_table
 
 from experiments.train_models.classic_ml import train_classic_ml, build_features
-from experiments.train_models.conv_lstm import train_small_lstm
+from experiments.train_models.conv_lstm import train_conv_lstm
 from experiments.train_models.emg2pose import get_emg2pose
 
 from experiments.models_inference.classic_ml import pls_window_inference, ridge_window_inference, features_window, classic_ml_inference
-from experiments.models_inference.conv_lstm import lstm_window_inference, small_lstm_inference
+from experiments.models_inference.conv_lstm import lstm_window_inference, conv_lstm_inference
 from experiments.models_inference.emg2pose import emg2pose_inferece, emg2pose_window_inference
 
 DEFAULT_DATA_DIR = Path("/Volumes") / "Crucial X9" # local machine
@@ -29,6 +29,7 @@ DEFAULT_DATA_DIR = Path("/Volumes") / "Crucial X9" # local machine
 ALL_MODELS = {"lstm", "ridge", "pls", "svr", "meta"}
 
 SAVE_VIDEO = False
+SELECT_USER = None
 
 @contextmanager
 def timer(name):
@@ -113,8 +114,8 @@ class ExperimentRunner():
         self.metrics_rows = []
         self.latency_rows = []
 
+    # Helper to select a seen user
     def eval_seen_user(self):
-
         # sanity check on training data
         if self.data_regime == "test":
             return (self.user_train_dict[next(iter(self.user_train_dict))])[0]
@@ -122,6 +123,7 @@ class ExperimentRunner():
         # a held out session from those we trained on
         return self.held_out_session
 
+    # Helper to select an unseen user
     def eval_unseen_user(self):
         # users NOT used in training
         unseen_users = [u for u in self.user_list if u not in self.user_train_dict]
@@ -145,6 +147,7 @@ class ExperimentRunner():
         self.unseen_user_session = rand_session
         return rand_session
         
+    # Compute and save all necessary model metrics    
     def model_metrics(self, label, 
                     model_type, model,
                     preds, gt, mask,
@@ -196,7 +199,9 @@ class ExperimentRunner():
     
     def run(self):
 
-        self.user_train_dict, self.held_out_session = load_data(self.data_regime, self.user_list)
+        print(SELECT_USER)
+
+        self.user_train_dict, self.held_out_session = load_data(self.data_regime, self.user_list, SELECT_USER)
 
         Path(f"{self.save_dir}/train_dict.json").write_text(
             json.dumps({
@@ -216,7 +221,7 @@ class ExperimentRunner():
         if "lstm" in self.models_to_run:
             with timer("LSTM Training"):
                 emg, joint_angles_lstm = concat_data(self.user_train_dict)
-                small_lstm_model, seq_len, ds_factor, stride = train_small_lstm(emg, joint_angles_lstm, epochs=5)
+                small_lstm_model, seq_len, ds_factor, stride = train_conv_lstm(emg, joint_angles_lstm, epochs=5)
 
         if "meta" in self.models_to_run:
             with timer("Get Meta emg2pose"):
@@ -254,7 +259,7 @@ class ExperimentRunner():
             # Small LSTM
             if "lstm" in self.models_to_run:
                 with timer("LSTM"):
-                    lstm_preds, lstm_gt, mask_lstm = small_lstm_inference(
+                    lstm_preds, lstm_gt, mask_lstm = conv_lstm_inference(
                         self.eval_data, small_lstm_model, seq_len, ds_factor, stride
                     )
                     self.MODEL_CONFIGS["lstm"]["WINDOW"] = seq_len
@@ -298,8 +303,13 @@ if __name__ == "__main__":
 
     parser.add_argument("--data_dir", type=str, default=DEFAULT_DATA_DIR)
 
+    # override random user selection for training and seen eval
+    parser.add_argument("--select_user", type=str, default=None)
+
+    # flag to save video of prediction and ground truth visualization 
     parser.add_argument("--save_video", action="store_true")
 
+    # choose what models to run or skip (by default runs all)
     parser.add_argument("--only", nargs="+", choices=ALL_MODELS, help="models to run")
     parser.add_argument("--skip", nargs="+", choices=ALL_MODELS, help="models to skip")
 
@@ -313,6 +323,7 @@ if __name__ == "__main__":
     print(f"Running: {models_to_run}")
 
     SAVE_VIDEO = args.save_video
+    SELECT_USER = args.select_user
 
     # entry point
     runner = ExperimentRunner(

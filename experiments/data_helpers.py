@@ -3,13 +3,16 @@ import numpy as np
 from emg2pose.data import Emg2PoseSessionData
 
 # Load Data Based on Training Regime
-def load_data(data_regime, user_list):
+def load_data(data_regime, user_list, select_user=None):
     if data_regime == "single_session" or data_regime == "test":
-        user_train_dict = pick_one_user(user_list)
+
+        if select_user is not None: user_train_dict = _get_selected_user(select_user, user_list)
+        else: user_train_dict = pick_one_user(user_list)
         user_train_dict, held_out_session = pick_sessions(data_regime, user_train_dict)
 
     elif data_regime == "single_user":
-        user_train_dict = pick_one_user(user_list)
+        if select_user is not None: user_train_dict = _get_selected_user(select_user, user_list)
+        else: user_train_dict = pick_one_user(user_list)
         user_train_dict, held_out_session = pick_sessions(data_regime, user_train_dict)
 
     elif data_regime == "multi_user":
@@ -21,6 +24,14 @@ def load_data(data_regime, user_list):
         user_train_dict, held_out_session = pick_sessions(data_regime, user_train_dict)
 
     return user_train_dict, held_out_session
+
+# overrides random single user selection
+def _get_selected_user(select_user, user_list):
+    # find the selected user
+    target_user = next((u for u in user_list if u.name == select_user), None)
+    if target_user is None:
+        raise ValueError("user does not exist")
+    return {target_user : []}
 
 # Training User and Session Selection Helpers
 def _user_has_valid_session(user):

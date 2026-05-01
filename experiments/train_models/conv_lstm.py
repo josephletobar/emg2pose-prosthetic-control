@@ -21,7 +21,7 @@ class ConvLSTM(nn.Module):
         return self.fc(out[:, -1, :])
         
 # LSTM training; returns the trained model
-def train_small_lstm(emg, joint_angles, epochs=5):
+def train_conv_lstm(emg, joint_angles, epochs=5):
 
     X = emg
     y = joint_angles
