@@ -251,10 +251,11 @@ class ExperimentRunner():
                 if hasattr(pls_model, "_prev"):
                     del pls_model._prev
                 
-            frames = joint_angles_to_frames_parallel(downsample(self.eval_data["joint_angles"], 2000, 30)[0:250])
-            frames = remove_alpha_channel(frames)
-            media.write_video(f"{self.save_dir}/ground_truth_{label}_eval.mp4", frames, fps=30)
-            print()
+            if SAVE_VIDEO:
+                frames = joint_angles_to_frames_parallel(downsample(self.eval_data["joint_angles"], 2000, 30)[0:250])
+                frames = remove_alpha_channel(frames)
+                media.write_video(f"{self.save_dir}/ground_truth_{label}_eval.mp4", frames, fps=30)
+                print()
         
             # Small LSTM
             if "lstm" in self.models_to_run:

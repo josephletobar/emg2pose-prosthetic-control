@@ -22,8 +22,19 @@ def conv_lstm_inference(data, model, seq_len, ds_factor, stride):
         window = X[i:i+seq_len]
         window = torch.tensor(window[None, ...], dtype=torch.float32)
 
+        if model.autoregressive:
+            if i == 0:
+                prev = torch.zeros((1, y.shape[1]))
+            prev_rep = prev.unsqueeze(1).repeat(1, seq_len, 1)
+            window = torch.cat([window, prev_rep], dim=2)
+
         with torch.no_grad():
-            pred = model(window).cpu().numpy()
+            pred = model(window)
+
+        if model.autoregressive:
+            prev = pred.detach()
+
+        pred = pred.cpu().numpy()
 
         preds.append(pred[0])
 
@@ -58,6 +69,11 @@ def lstm_window_inference(window, model, ds_factor, gt_window, mask_window):
     model.eval()
 
     x = torch.tensor(window_ds[None, ...], dtype=torch.float32)
+
+    if model.autoregressive:
+        prev = torch.zeros((1, gt_ds.shape[1]))
+        prev_rep = prev.unsqueeze(1).repeat(1, x.shape[1], 1)
+        x = torch.cat([x, prev_rep], dim=2)
 
     with torch.no_grad():
         pred = model(x).cpu().numpy()
