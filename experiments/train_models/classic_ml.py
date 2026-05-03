@@ -45,15 +45,15 @@ def train_classic_ml(emg_features, joint_angles):
     X = emg_features
     y = joint_angles
 
-    # --- ARX augmentation ---
+    # ARX augmentation
     X, y = _add_lags(X, y, lags=2)
 
-    # --- split (preserve time order) ---
+    # split (preserve time order)
     split_idx = int(0.8 * len(X))
     X_train, X_test = X[:split_idx], X[split_idx:]
     y_train, y_test = y[:split_idx], y[split_idx:]
 
-    # --- RIDGE ---
+    # RIDGE
     ridge_model = Pipeline([
         ("scaler", StandardScaler()),
         ("ridge", Ridge(alpha=1.0))
@@ -72,7 +72,7 @@ def train_classic_ml(emg_features, joint_angles):
     # svr_model.fit(X_train, y_train)
     svr_model = None
 
-    # --- PLS  ---
+    # PLS 
     pls_model = PLSRegression(n_components=10)  # try 5–20 range if needed
     pls_model.fit(X_train, y_train)
 

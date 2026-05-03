@@ -37,7 +37,7 @@ def stream_inference(
     mask_buf = []
     count = 0
 
-    ema_pred = None  # <-- state
+    ema_pred = None 
 
     max_iters = min(size, MAX_STEPS * STRIDE)
     for i in tqdm(range(max_iters), desc="Streaming"):

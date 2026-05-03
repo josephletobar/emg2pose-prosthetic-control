@@ -24,8 +24,6 @@ def emg2pose_inferece(data: Emg2PoseSessionData, module):
 
     preds, joint_angles, no_ik_failure = module.forward(batch)
 
-    # Algorithms that use the initial state for ground truth will do poorly
-    # when the first joint angles are missing!
     if (joint_angles[:, 0] == 0).all():
         print(
             "Warning! Ground truth not available at first time step!"
@@ -64,7 +62,7 @@ def emg2pose_window_inference(window, module, gt_window, mask_window):
     # (1, C_out, T) -> (T, C_out)
     preds = preds[0].T.detach().cpu().numpy()
 
-    # --- align like LSTM: last timestep ---
+    # align like LSTM: last timestep
     pred = preds[-1]
     gt = gt_window[-1]
     mask = mask_window[-1]

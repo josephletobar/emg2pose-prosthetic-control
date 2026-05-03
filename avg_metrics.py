@@ -4,7 +4,8 @@ from datetime import datetime
 
 ROOT = Path("results/single_user")
 
-RUN_DATE = None #20260502
+# Set what dates run to average over
+RUN_DATE = 20260502 # or None for all
 
 metrics_all = []
 latency_all = []
@@ -36,14 +37,14 @@ for run_dir in ROOT.iterdir():
 metrics_df = pd.concat(metrics_all, ignore_index=True)
 latency_df = pd.concat(latency_all, ignore_index=True)
 
-# ---- AVERAGE METRICS ----
+# AVERAGE METRICS
 metrics_avg = (
     metrics_df
     .groupby(["Test Set", "Model"], as_index=False)
     .mean(numeric_only=True)
 )
 
-# ---- AVERAGE LATENCY ----
+# AVERAGE LATENCY
 latency_avg = (
     latency_df
     .groupby(["Model"], as_index=False)

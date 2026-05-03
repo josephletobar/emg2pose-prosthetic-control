@@ -11,7 +11,6 @@ def classic_ml_inference(data, ridge_model, svr_model, pls_model, lags=2):
     ridge_preds = []
     pls_preds = []
 
-    # initialize with zeros (or first GT if you want teacher forcing)
     prev_ridge = [np.zeros(D) for _ in range(lags)]
     prev_pls   = [np.zeros(D) for _ in range(lags)]
 
