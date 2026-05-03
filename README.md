@@ -66,7 +66,7 @@ Code requirements are specified in `environment.yml`, which includes dependencie
 - `avg_metrics.py`  
   Aggregates metrics produced by `run_experiment.py`, optionally filtered by a specific run date, and computes final reported results.
 
-- `Helper` folder  
+- `Experiments` folder  
   Helper modules for data processing, model architecture definitions, training and inference routines, and utility functions.
 
 - `Notebooks` folder  (used for additional analysis supporting the paper)
