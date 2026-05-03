@@ -3,29 +3,27 @@
 This project builds on the [emg2pose work by Facebook Research](https://github.com/facebookresearch/emg2pose) and extends its analysis to evaluate how EMG-based pose regression performs in prosthetic control contexts. It focuses on practical constraints such as latency, user variability, data availability, and model capacity, with an emphasis on personalization.
 
 ## Data (Quoted)
-> A dataset of surface electromyography (sEMG) recordings paired with ground-truth, motion-capture recordings of the hands.
-> 
+A dataset of surface electromyography (sEMG) recordings paired with ground-truth, motion-capture recordings of the hands.
+ 
 <p align="center">
   <img src="https://fb-ctrl-oss.s3.amazonaws.com/emg2pose/emg2pose_overview.png" alt="EMG2Pose Overview" width="75%">
 </p>
 
-> The entire dataset has 25,253 HDF5 files, each consisting of time-aligned, 2kHz sEMG and joint angles for a single hand in a single stage. Each stage is ~1 minute. There are 193 participants, spanning 370 hours and 29 stages. 
+The entire dataset has 25,253 HDF5 files, each consisting of time-aligned, 2kHz sEMG and joint angles for a single hand in a single stage. Each stage is ~1 minute. There are 193 participants, spanning 370 hours and 29 stages. 
 
-> The `metadata.csv` file includes the following information for each HDF5 file:  
->  
-> | Column             | Description |
-> |--------------------|-------------|
-> | `user`              | Anonymized user ID |
-> | `session`           | Recording session (there are multiple stages per recording session) |
-> | `stage`             | Name of stage |
-> | `side`              | Hand side (`left` or `right`) |
-> | `moving_hand`       | Whether the hand is prompted to move during the stage |
-> | `held_out_user`     | Whether the user is held out from the training set |
-> | `held_out_stage`    | Whether the stage is held out from the training set |
-> | `split`             | `train`, `test`, or `val` |
-> | `generalization`    | Type of generalization; across user (`user`), stage (`stage`), or across user and stage (`user_stage`) |
-
-> — Source: [Original emg2pose repository (Facebook Research)](https://github.com/facebookresearch/emg2pose)
+The `metadata.csv` file includes the following information for each HDF5 file:  
+  
+| Column             | Description |
+|--------------------|-------------|
+| `user`              | Anonymized user ID |
+| `session`           | Recording session (there are multiple stages per recording session) |
+| `stage`             | Name of stage |
+| `side`              | Hand side (`left` or `right`) |
+| `moving_hand`       | Whether the hand is prompted to move during the stage |
+| `held_out_user`     | Whether the user is held out from the training set |
+| `held_out_stage`    | Whether the stage is held out from the training set |
+| `split`             | `train`, `test`, or `val` |
+| `generalization`    | Type of generalization; across user (`user`), stage (`stage`), or across user and stage (`user_stage`) |
 
 ### Download the Full Dataset (431 GiB)
 
@@ -50,6 +48,8 @@ cd ~ && curl "https://fb-ctrl-oss.s3.amazonaws.com/emg2pose/emg2pose_model_check
 # Unpack to ~/emg2pose_model_checkpoints
 tar -xvzf emg2pose_model_checkpoints.tar.gz
 ```
+
+> — Source: [Original emg2pose repository (Facebook Research)](https://github.com/facebookresearch/emg2pose)
 
 ## Code
 Code requirements are specified in `environment.yml`, which includes dependencies for this project as well as the original emg2pose library that this analysis builds upon. The file is included in the submission zip.
