@@ -2,6 +2,16 @@
 
 This project builds on the [emg2pose work by Facebook Research](https://github.com/facebookresearch/emg2pose) and extends its analysis to evaluate how EMG-based pose regression performs in prosthetic control contexts. It focuses on practical constraints such as latency, user variability, data availability, and model capacity, with an emphasis on personalization.
 
+<p align="center">
+  <a href="papers/emg2pose-prosthetic-control-research-paper.pdf">
+    <img src="images/research-paper-preview.png" alt="First page of An Empirical Evaluation of Practical Machine Learning for Surface Electromyography-Based Prosthetic Hand Control" width="65%">
+  </a>
+</p>
+
+<p align="center">
+  <a href="papers/emg2pose-prosthetic-control-research-paper.pdf">Read the full research paper (PDF)</a>
+</p>
+
 ## Data (Quoted)
 A dataset of surface electromyography (sEMG) recordings paired with ground-truth, motion-capture recordings of the hands.
  
@@ -66,5 +76,4 @@ Code requirements are specified in `environment.yml`, which includes dependencie
     Fine-tunes the emg2pose model by freezing earlier layers and adapting it to a selected held-out user.
   - `subset_training.ipynb`  
     Trains the emg2pose model from scratch on a very small subset of data.
-
 
